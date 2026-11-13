@@ -41,6 +41,6 @@ public final class CameraCadence {
         double fps=phase==Phase.DIP?(level==12?6:10):normal;
         // Darkness and motion change individual intervals as well as triggering whole phases.
         double strain=1+Math.max(0,.28-frame.brightness)*.5+Math.min(.15,frame.change*.25);
-        return Math.max(50_000,(long)((1_000_000/fps)*(1+random.nextDouble()*.18)*strain));
+        return Math.max(phase==Phase.DIP?100_000:50_000,(long)((1_000_000/fps)*(.88+random.nextDouble()*.30)*strain));
     }
 }
