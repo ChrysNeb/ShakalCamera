@@ -30,7 +30,7 @@ public class VideoEngineTest {
             while(extractor.getSampleTime()>=0){timestamps.add(extractor.getSampleTime());extractor.advance();}
             java.util.Collections.sort(timestamps);for(long time:timestamps){if(previous>=0){long d=time-previous;minimum=Math.min(minimum,d);maximum=Math.max(maximum,d);intervals.add(d/1000);}previous=time;count++;}
         }finally{extractor.release();input.delete();output.delete();}
-        assertTrue("real frames exist",count>20);assertTrue("no >20fps intervals: "+minimum,minimum>=49_000);assertTrue("half-second hold: "+maximum,maximum>=400_000);assertTrue("irregular PTS",intervals.size()>=3);
+        assertTrue("real frames exist",count>20);assertTrue("no >20fps intervals: "+minimum,minimum>=49_000);assertTrue("half-second hold: "+maximum,maximum>=400_000);assertTrue("hold not accidentally extended: "+maximum,maximum<650_000);assertTrue("irregular PTS",intervals.size()>=3);
         android.util.Log.i("ShakalTiming","frames="+count+" minIntervalUs="+minimum+" maxIntervalUs="+maximum+" distinctIntervals="+intervals.size());
     }
     @Test public void nativeVideoHasDecodableAvcAndAacAtEveryLevel() throws Exception {

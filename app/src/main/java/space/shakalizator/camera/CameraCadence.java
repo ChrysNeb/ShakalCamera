@@ -19,12 +19,12 @@ public final class CameraCadence {
             lastContentEvent=timeUs;
             if(phase==Phase.NORMAL){
                 phase=frame.cut&&random.nextFloat()<.4f?Phase.FREEZE:Phase.DIP;
-                phaseEnd=timeUs+(phase==Phase.FREEZE?freezeDuration():450_000+random.nextInt(550_001));
+                phaseEnd=phase==Phase.FREEZE?freezeEnd(timeUs):timeUs+450_000+random.nextInt(550_001);
             }
         }
         if(timeUs>=phaseEnd){
             if(phase==Phase.NORMAL){phase=Phase.DIP;phaseEnd=timeUs+500_000+random.nextInt(650_001);}
-            else if(phase==Phase.DIP&&(++dips%2==0||random.nextFloat()<.6f)){phase=Phase.FREEZE;phaseEnd=timeUs+freezeDuration();}
+            else if(phase==Phase.DIP&&(++dips%2==0||random.nextFloat()<.6f)){phase=Phase.FREEZE;phaseEnd=freezeEnd(timeUs);}
             else {phase=Phase.NORMAL;phaseEnd=timeUs+normalDuration();}
         }
         if(lastKept<0){lastKept=timeUs;nextFrame=timeUs+interval(frame);return true;}
@@ -35,6 +35,9 @@ public final class CameraCadence {
     }
     private long normalDuration(){return 1_650_000+random.nextInt(1_750_001);}
     private long freezeDuration(){return 430_000+random.nextInt(140_001);}
+    // Anchor to the frame actually on screen, not to the later decision to enter FREEZE.
+    // Otherwise a preceding slow-frame interval accidentally adds another 100–150 ms.
+    private long freezeEnd(long timeUs){return Math.max(timeUs+200_000,(lastKept<0?timeUs:lastKept)+freezeDuration());}
     private long interval(FrameMotion.Sample frame){
         int l=level==12?10:level;
         double normal=level==12?8:20-(l-1)*.35;
