@@ -13,6 +13,19 @@ import static org.junit.Assert.*;
 @RunWith(AndroidJUnit4.class)
 @androidx.annotation.OptIn(markerClass=androidx.media3.common.util.UnstableApi.class)
 public class VideoEngineTest {
+    @Test public void exportedMp4ReallyHasIrregularFrameTimesAndFreezes() throws Exception {
+        android.app.Instrumentation instrumentation=InstrumentationRegistry.getInstrumentation();Context context=instrumentation.getTargetContext();
+        File input=new File(context.getCacheDir(),"motion-long.mp4"),output=new File(context.getCacheDir(),"irregular.mp4");
+        try(InputStream in=instrumentation.getContext().getAssets().open("motion-long.mp4");OutputStream out=new FileOutputStream(input)){byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1)out.write(b,0,n);}
+        CountDownLatch latch=new CountDownLatch(1);AtomicReference<Exception> error=new AtomicReference<>();AtomicReference<VideoEngine> engine=new AtomicReference<>();
+        instrumentation.runOnMainSync(()->{VideoEngine e=new VideoEngine(context);engine.set(e);e.start(input,6,32,output,new VideoEngine.Listener(){public void progress(int n,String s){}public void done(File f){latch.countDown();}public void error(Exception ex){error.set(ex);latch.countDown();}});});
+        boolean complete=latch.await(180,TimeUnit.SECONDS);if(!complete)instrumentation.runOnMainSync(()->engine.get().cancel());assertTrue("export timeout",complete);assertNull("export failed: "+error.get(),error.get());
+        MediaExtractor extractor=new MediaExtractor();long minimum=Long.MAX_VALUE,maximum=0,previous=-1;int count=0;java.util.Set<Long> intervals=new java.util.HashSet<>();
+        try{extractor.setDataSource(output.getPath());for(int i=0;i<extractor.getTrackCount();i++)if(extractor.getTrackFormat(i).getString(MediaFormat.KEY_MIME).startsWith("video/")){extractor.selectTrack(i);break;}
+            while(extractor.getSampleTime()>=0){long time=extractor.getSampleTime();if(previous>=0){long d=time-previous;minimum=Math.min(minimum,d);maximum=Math.max(maximum,d);intervals.add(d/1000);}previous=time;count++;extractor.advance();}
+        }finally{extractor.release();input.delete();output.delete();}
+        assertTrue("real frames exist",count>20);assertTrue("no >20fps intervals: "+minimum,minimum>=49_000);assertTrue("half-second hold: "+maximum,maximum>=400_000);assertTrue("irregular PTS",intervals.size()>=3);
+    }
     @Test public void nativeVideoHasDecodableAvcAndAacAtEveryLevel() throws Exception {
         android.app.Instrumentation instrumentation=InstrumentationRegistry.getInstrumentation();Context context=instrumentation.getTargetContext();
         File input=new File(context.getCacheDir(),"motion.mp4");try(InputStream in=instrumentation.getContext().getAssets().open("motion.mp4");OutputStream out=new FileOutputStream(input)){byte[] buffer=new byte[8192];int n;while((n=in.read(buffer))!=-1)out.write(buffer,0,n);}
