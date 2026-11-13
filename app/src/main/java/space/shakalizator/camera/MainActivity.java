@@ -35,7 +35,7 @@ public final class MainActivity extends ComponentActivity {
     private TextView status,label,hero;private ProgressBar progress;private Button shutter,flip,flash,zoom,modePhoto,modeVideo,art,importButton,mute,save,share,again,back,before,cancel;
     private SeekBar slider;private Spinner resampling;private LinearLayout resultActions,cameraActions;private View levelControls;
     private boolean videoMode=false,front=false,torch=false,mic=true,busy=false,resultVideo=false,showingOriginal=false,destroying=false,liveFilter=true;
-    private Bitmap liveBitmap;
+    private GpuPreview gpuPreview; private boolean gpuUnavailable; private String gpuFailure="";
     private Button liveButton;
     private int level=6,generation=0,resultLevel=6;private String mode="paint";private long seed=1,started;private File source,result;private Bitmap displayed;private Future<?> photoTask;private VideoEngine engine;
     private final ActivityResultLauncher<String[]> permissions=registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(),grants->{bindCamera();});
@@ -47,7 +47,7 @@ public final class MainActivity extends ComponentActivity {
         super.onCreate(state);getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if(state!=null){level=state.getInt("level",6);front=state.getBoolean("front",false);videoMode=state.getBoolean("videoMode",false);mode=state.getString("mode","paint");}
         File dir=new File(getCacheDir(),"exports");dir.mkdirs();File[] old=dir.listFiles();if(old!=null)for(File f:old)if(System.currentTimeMillis()-f.lastModified()>24*60*60*1000L)f.delete();
-        buildUi();main.postDelayed(this::liveFrame,800);
+        buildUi();
         if(has(Manifest.permission.CAMERA))bindCamera();else permissions.launch(new String[]{Manifest.permission.CAMERA});
         getOnBackPressedDispatcher().addCallback(this,new androidx.activity.OnBackPressedCallback(true){@Override public void handleOnBackPressed(){if(busy){cancelWork();}else if(result!=null){returnCamera();}else{setEnabled(false);getOnBackPressedDispatcher().onBackPressed();}}});
     }
@@ -63,11 +63,11 @@ public final class MainActivity extends ComponentActivity {
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);root.setPadding(dp(10),0,dp(10),dp(6));setContentView(root);
         root.setOnApplyWindowInsetsListener((v,insets)->{root.setPadding(dp(10),insets.getSystemWindowInsetTop(),dp(10),Math.max(dp(6),insets.getSystemWindowInsetBottom()));return insets;});
         LinearLayout header=row();TextView logo=text("ШАКАЛ [КАМЕРА]",22,ORANGE);logo.setTypeface(null,Typeface.BOLD);header.addView(logo,new LinearLayout.LayoutParams(0,dp(46),1));Button info=button("?",()->new android.app.AlertDialog.Builder(this).setTitle("Камера с характером")
-            .setMessage("Нативная камера: CameraX / Camera2.\n\nФото: уровни и JPEG-проходы из фото-шакализатора; Paint, Nearest и Чистый.\nВидео: два поколения H.264, низкий битрейт, клетки, снижение FPS и телефонный звук. Это нативная адаптация, без битстрим-датамоша FFmpeg.\n\n12/10 — высокое пиксельное искусство. Фото до 2048 px, ролики до 60 секунд.\n\nФильтр в видоискателе — облегчённое превью, обновляется примерно раз в секунду. Окончательная обработка после съёмки. Всё локально. Приложение не имеет доступа к интернету.")
+            .setMessage("Нативная камера: CameraX / Camera2.\n\nФото: уровни и JPEG-проходы из фото-шакализатора; Paint, Nearest и Чистый.\nВидео: два поколения H.264, низкий битрейт, клетки, снижение FPS и телефонный звук. Это нативная адаптация, без битстрим-датамоша FFmpeg.\n\n12/10 — высокое пиксельное искусство. Фото до 2048 px, ролики до 60 секунд.\n\nФильтр в видоискателе работает на GPU: цель — до 30 кадров/с, нагрузка снижается при необходимости. Это быстрый эскиз; полная обработка применяется после съёмки. Всё локально. Приложение не имеет доступа к интернету.")
             .setPositiveButton("Прекрасно",null).show());header.addView(info,new LinearLayout.LayoutParams(dp(48),dp(44)));root.addView(header);
         hero=text("Фото, которое обрело душу. Бережно. В телефоне.",12,MUTED);root.addView(hero);
         viewport=new FrameLayout(this);viewport.setBackground(rounded(PANEL));LinearLayout.LayoutParams vp=new LinearLayout.LayoutParams(-1,0,1);vp.setMargins(0,dp(8),0,dp(5));root.addView(viewport,vp);
-        preview=new PreviewView(this);preview.setImplementationMode(PreviewView.ImplementationMode.COMPATIBLE);preview.setScaleType(PreviewView.ScaleType.FIT_CENTER);viewport.addView(preview,new FrameLayout.LayoutParams(-1,-1));
+        preview=new PreviewView(this);preview.setImplementationMode(PreviewView.ImplementationMode.PERFORMANCE);preview.setScaleType(PreviewView.ScaleType.FIT_CENTER);viewport.addView(preview,new FrameLayout.LayoutParams(-1,-1));
         image=new ImageView(this);image.setScaleType(ImageView.ScaleType.FIT_CENTER);image.setVisibility(View.GONE);viewport.addView(image,new FrameLayout.LayoutParams(-1,-1));
         video=new VideoView(this);video.setVisibility(View.GONE);FrameLayout.LayoutParams vv=new FrameLayout.LayoutParams(-1,-1,Gravity.CENTER);viewport.addView(video,vv);MediaController controls=new MediaController(this);controls.setAnchorView(video);video.setMediaController(controls);video.setOnPreparedListener(p->{p.setLooping(true);video.start();});video.setOnErrorListener((p,w,e)->{toast("Не удалось воспроизвести видео на этом устройстве");return true;});
         preview.setOnTouchListener((v,e)->{if(e.getAction()==android.view.MotionEvent.ACTION_UP && camera!=null && !busy && result==null){MeteringPoint point=preview.getMeteringPointFactory().createPoint(e.getX(),e.getY());camera.getCameraControl().startFocusAndMetering(new FocusMeteringAction.Builder(point).setAutoCancelDuration(3,TimeUnit.SECONDS).build());v.performClick();}return true;});
@@ -78,7 +78,7 @@ public final class MainActivity extends ComponentActivity {
         LinearLayout settings=row();TextView rt=text("Ресемплинг  ",12,MUTED);settings.addView(rt);resampling=new Spinner(this);ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"Paint","Nearest","Чистый"});resampling.setAdapter(adapter);resampling.setSelection(mode.equals("nearest")?1:mode.equals("clean")?2:0);settings.addView(resampling,new LinearLayout.LayoutParams(0,dp(42),1));resampling.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onItemSelected(AdapterView<?> p,View v,int i,long id){mode=new String[]{"paint","nearest","clean"}[i];if(v instanceof TextView)((TextView)v).setTextColor(TEXT);}public void onNothingSelected(AdapterView<?> p){}});mute=button("Звук вкл.",()->{if(busy||recording!=null)return;if(!has(Manifest.permission.RECORD_AUDIO)){audioPermission.launch(Manifest.permission.RECORD_AUDIO);}else{mic=!mic;updateControls();}});settings.addView(mute,new LinearLayout.LayoutParams(dp(92),dp(42)));root.addView(settings);
         cameraActions=new LinearLayout(this);cameraActions.setOrientation(LinearLayout.VERTICAL);LinearLayout modes=row();modePhoto=button("ФОТО",()->setMode(false));modeVideo=button("ВИДЕО · 60с",()->setMode(true));importButton=button("Из галереи",()->{if(!busy&&recording==null)pick.launch(new String[]{"image/*","video/*"});});add(modes,modePhoto);add(modes,modeVideo);add(modes,importButton);cameraActions.addView(modes);
         LinearLayout tools=row();flip=button("↻ Камера",()->{if(busy||recording!=null)return;front=!front;torch=false;bindCamera();});flash=button("⚡ Свет",()->{if(camera!=null&&!busy&&recording==null){torch=!torch;camera.getCameraControl().enableTorch(torch);updateControls();}});zoom=button("1× / 2×",()->{if(camera!=null&&!busy&&recording==null){androidx.camera.core.ZoomState z=camera.getCameraInfo().getZoomState().getValue();if(z!=null)camera.getCameraControl().setZoomRatio(z.getZoomRatio()>1.1f?1f:Math.min(2,z.getMaxZoomRatio()));}});add(tools,flip);add(tools,flash);add(tools,zoom);cameraActions.addView(tools);
-        liveButton=button("Фильтр в кадре",()->{liveFilter=!liveFilter;accent(liveButton,liveFilter);if(!liveFilter&&result==null){image.setVisibility(View.GONE);image.setImageDrawable(null);if(liveBitmap!=null){liveBitmap.recycle();liveBitmap=null;}}});add(tools,liveButton);accent(liveButton,true);
+        liveButton=button("Фильтр в кадре",()->{liveFilter=!liveFilter;accent(liveButton,liveFilter);if(gpuPreview!=null)gpuPreview.settings(level,liveFilter);});add(tools,liveButton);accent(liveButton,true);
         shutter=button("●  Снять фото",this::capture);cameraActions.addView(shutter,new LinearLayout.LayoutParams(-1,dp(58)));root.addView(cameraActions);
         resultActions=new LinearLayout(this);resultActions.setOrientation(LinearLayout.VERTICAL);LinearLayout r1=row();save=button("Сохранить",this::saveResult);share=button("Поделиться",this::shareResult);again=button("Ещё шакальнее",()->{if(result!=null&&!busy)process(result,resultVideo);});add(r1,save);add(r1,share);add(r1,again);resultActions.addView(r1);
         LinearLayout r2=row();before=button("Оригинал",()->showResult(!showingOriginal));back=button("← Камера",this::returnCamera);add(r2,before);add(r2,back);resultActions.addView(r2);resultActions.setVisibility(View.GONE);root.addView(resultActions);
@@ -88,6 +88,8 @@ public final class MainActivity extends ComponentActivity {
     private boolean has(String p){return ContextCompat.checkSelfPermission(this,p)==PackageManager.PERMISSION_GRANTED;}
     private void setMode(boolean videoMode){if(busy||recording!=null)return;this.videoMode=videoMode;bindCamera();updateControls();}
     private void updateControls(){
+        if(gpuPreview!=null)gpuPreview.settings(level,liveFilter);
+        liveButton.setEnabled(!gpuUnavailable&&!busy&&result==null);accent(liveButton,liveFilter&&!gpuUnavailable);
         label.setText(level==12?"🐺 12/10 · искусство":("🐺 "+level+"/10 шакалов"));accent(art,level==12);accent(modePhoto,!videoMode);accent(modeVideo,videoMode);accent(shutter,true);accent(flash,torch);
         shutter.setText(recording!=null?"■  Остановить запись":videoMode?"●  Записать видео":"●  Снять фото");
         shutter.setEnabled(!busy && camera!=null);flip.setEnabled(!busy&&recording==null);flash.setEnabled(!busy&&recording==null&&camera!=null&&camera.getCameraInfo().hasFlashUnit());
@@ -101,11 +103,15 @@ public final class MainActivity extends ComponentActivity {
             if(destroying||busy||result!=null)return;
             try{provider=future.get();provider.unbindAll();CameraSelector selector=front?CameraSelector.DEFAULT_FRONT_CAMERA:CameraSelector.DEFAULT_BACK_CAMERA;
                 if(!provider.hasCamera(selector)){front=!front;selector=front?CameraSelector.DEFAULT_FRONT_CAMERA:CameraSelector.DEFAULT_BACK_CAMERA;}
-                Preview p=new Preview.Builder().build();p.setSurfaceProvider(preview.getSurfaceProvider());
-                if(videoMode){Recorder recorder=new Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.HD,FallbackStrategy.lowerQualityOrHigherThan(Quality.HD))).build();videoCapture=VideoCapture.withOutput(recorder);camera=provider.bindToLifecycle(this,selector,p,videoCapture);imageCapture=null;}
-                else{imageCapture=new ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).setJpegQuality(94).build();camera=provider.bindToLifecycle(this,selector,p,imageCapture);videoCapture=null;}
+                if(gpuPreview!=null){gpuPreview.close();gpuPreview=null;}
+                Preview p=new Preview.Builder().setResolutionSelector(new androidx.camera.core.resolutionselector.ResolutionSelector.Builder().setResolutionStrategy(new androidx.camera.core.resolutionselector.ResolutionStrategy(new android.util.Size(640,480),androidx.camera.core.resolutionselector.ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER)).build()).setTargetFrameRate(new android.util.Range<>(15,30)).build();p.setSurfaceProvider(preview.getSurfaceProvider());
+                UseCaseGroup.Builder group=new UseCaseGroup.Builder().addUseCase(p);
+                if(!gpuUnavailable){GpuPreview[] holder=new GpuPreview[1];holder[0]=new GpuPreview(error->main.post(()->{if(gpuPreview!=holder[0]||destroying||busy||result!=null)return;gpuFailure=error.toString();gpuUnavailable=true;liveFilter=false;bindCamera();toast("GPU-фильтр недоступен. Включено обычное плавное превью.");}));gpuPreview=holder[0];gpuPreview.settings(level,liveFilter);group.addEffect(gpuPreview.effect());}
+                if(videoMode){Recorder recorder=new Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.HD,FallbackStrategy.lowerQualityOrHigherThan(Quality.HD))).build();videoCapture=VideoCapture.withOutput(recorder);group.addUseCase(videoCapture);imageCapture=null;}
+                else{imageCapture=new ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).setJpegQuality(94).build();group.addUseCase(imageCapture);videoCapture=null;}
+                camera=provider.bindToLifecycle(this,selector,group.build());
                 status.setText("Касание = фокус · окончательный фильтр после съёмки");updateControls();
-            }catch(Exception e){camera=null;status.setText("Камера недоступна. Можно выбрать фото или видео из галереи.");updateControls();}
+            }catch(Exception e){camera=null;if(gpuPreview!=null&&!gpuUnavailable){gpuFailure=e.toString();gpuPreview.close();gpuPreview=null;gpuUnavailable=true;liveFilter=false;bindCamera();return;}status.setText("Камера недоступна. Можно выбрать фото или видео из галереи.");updateControls();}
         },ContextCompat.getMainExecutor(this));
     }
     private File temp(String ext){return new File(new File(getCacheDir(),"exports"),"shakal_"+System.nanoTime()+ext);}
@@ -135,7 +141,7 @@ public final class MainActivity extends ComponentActivity {
         }catch(Exception e){f.delete();main.post(()->{if(token==generation)setBusy(false,"Не удалось открыть файл: "+e.getMessage());});}});
     }
     private void process(File input,boolean isVideo){
-        if(destroying||busy)return;showingOriginal=false;video.stopPlayback();video.setVisibility(View.GONE);image.setVisibility(View.GONE);image.setImageDrawable(null);if(liveBitmap!=null){liveBitmap.recycle();liveBitmap=null;}if(provider!=null)provider.unbindAll();camera=null;
+        if(destroying||busy)return;showingOriginal=false;video.stopPlayback();video.setVisibility(View.GONE);image.setVisibility(View.GONE);image.setImageDrawable(null);if(provider!=null)provider.unbindAll();if(gpuPreview!=null){gpuPreview.close();gpuPreview=null;}camera=null;
         if(source==null||result==null){source=input;seed=System.nanoTime();}
         resultVideo=isVideo;resultLevel=level;int processingLevel=level;String sampling=mode;int token=++generation;started=SystemClock.elapsedRealtime();setBusy(true,isVideo?"Готовим видео · максимум 60 секунд":"Бережно добавляем шакалов…");
         File output=temp(isVideo?".mp4":level==12?".png":".jpg");
@@ -178,16 +184,9 @@ public final class MainActivity extends ComponentActivity {
     private void shareResult(){if(result==null||busy)return;video.pause();Uri uri=FileProvider.getUriForFile(this,getPackageName()+".files",result);Intent i=new Intent(Intent.ACTION_SEND);i.setType(resultVideo?"video/mp4":result.getName().endsWith("png")?"image/png":"image/jpeg");i.putExtra(Intent.EXTRA_STREAM,uri);i.setClipData(ClipData.newRawUri("Шакальное искусство",uri));i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);startActivity(Intent.createChooser(i,"Поделиться искусством"));}
     private String formatSize(long n){return String.format(Locale.ROOT,"%.1f МБ",n/1048576.0);}
     private void toast(String text){Toast.makeText(this,text,Toast.LENGTH_LONG).show();}
-    private void liveFrame(){
-        if(destroying)return;
-        if(!liveFilter||busy||result!=null||camera==null||!getLifecycle().getCurrentState().isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)){main.postDelayed(this::liveFrame,700);return;}
-        Bitmap raw=preview.getBitmap();if(raw==null){main.postDelayed(this::liveFrame,700);return;}
-        int[] wh=Levels.fit(raw.getWidth(),raw.getHeight(),360);Bitmap small=PhotoEngine.scale(raw,wh[0],wh[1],true);raw.recycle();int l=level;String sampling=videoMode?"nearest":mode;int token=generation;
-        try{worker.submit(()->{Bitmap frame=null;try{frame=PhotoEngine.process(small,l,sampling,seed,n->{});}catch(Exception|OutOfMemoryError ignored){}finally{small.recycle();}Bitmap output=frame;main.post(()->{
-            if(output!=null){if(!destroying&&liveFilter&&!busy&&result==null&&token==generation){image.setImageBitmap(output);image.setVisibility(View.VISIBLE);if(liveBitmap!=null)liveBitmap.recycle();liveBitmap=output;}else output.recycle();}
-            if(!destroying)main.postDelayed(this::liveFrame,600);
-        });});}catch(RejectedExecutionException e){small.recycle();}
-    }
+    GpuPreview gpuPreviewForTests(){return gpuPreview;}
+    String gpuFailureForTests(){return gpuFailure;}
+    Rect previewBoundsForTests(){int[] p=new int[2];preview.getLocationOnScreen(p);return new Rect(p[0],p[1],p[0]+preview.getWidth(),p[1]+preview.getHeight());}
     @Override protected void onStop(){super.onStop();if(recording!=null)recording.stop();video.pause();}
-    @Override protected void onDestroy(){destroying=true;++generation;if(recording!=null)recording.close();if(engine!=null)engine.cancel();if(photoTask!=null)photoTask.cancel(true);worker.shutdownNow();main.removeCallbacksAndMessages(null);video.stopPlayback();image.setImageDrawable(null);if(displayed!=null)displayed.recycle();if(liveBitmap!=null)liveBitmap.recycle();super.onDestroy();}
+    @Override protected void onDestroy(){destroying=true;++generation;if(provider!=null)provider.unbindAll();if(recording!=null)recording.close();if(engine!=null)engine.cancel();if(photoTask!=null)photoTask.cancel(true);worker.shutdownNow();main.removeCallbacksAndMessages(null);video.stopPlayback();image.setImageDrawable(null);if(displayed!=null)displayed.recycle();if(gpuPreview!=null)gpuPreview.close();super.onDestroy();}
 }
