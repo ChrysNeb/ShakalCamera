@@ -26,7 +26,7 @@ jobs:
           ram-size: 2048M
           heap-size: 512M
           emulator-options: '-no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back emulated -camera-front emulated'
-          script: sh ./gradlew connectedDebugAndroidTest
+          script: sh ./gradlew connectedDebugAndroidTest; result=$?; mkdir -p app/build/device-samples; adb pull /sdcard/Android/data/space.shakalizator.camera/files/video-1.0.1-sample.mp4 app/build/device-samples/ || true; exit $result
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -34,3 +34,4 @@ jobs:
           path: |
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
+            app/build/device-samples/
