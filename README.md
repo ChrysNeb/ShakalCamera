@@ -6,11 +6,11 @@
 
 [![Android 8+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](docs/INSTALL.md)
 [![Java 17](https://img.shields.io/badge/Java-17-f5a524?style=flat-square)](docs/DEVELOPMENT.md)
-[![Build](https://github.com/drtxc/ShakalCamera/actions/workflows/android.yml/badge.svg)](https://github.com/drtxc/ShakalCamera/actions/workflows/android.yml)
+[![Build](https://github.com/ChrysNeb/ShakalCamera/actions/workflows/android.yml/badge.svg)](https://github.com/ChrysNeb/ShakalCamera/actions/workflows/android.yml)
 [![Offline](https://img.shields.io/badge/100%25-offline-f5a524?style=flat-square)](#приватность)
 [![Preview](https://img.shields.io/badge/status-preview-orange?style=flat-square)](TESTING.md)
 
-### [↓ Скачать APK](https://github.com/drtxc/ShakalCamera/releases/tag/v1.0.1) · [Установка](docs/INSTALL.md) · [Как собрать](docs/DEVELOPMENT.md) · [Страница проекта](https://drtxc.github.io/ShakalCamera/)
+### [↓ Скачать APK](https://github.com/ChrysNeb/ShakalCamera/releases/tag/v1.0.2) · [Установка](docs/INSTALL.md) · [Как собрать](docs/DEVELOPMENT.md) · [Страница проекта](https://ChrysNeb.github.io/ShakalCamera/)
 
 Без аккаунтов. Без водяных знаков. Без интернета.
 
@@ -20,6 +20,8 @@
 
 ## Снимай сразу с характером
 
+**Новое в 1.0.2:** живой фильтр теперь работает на GPU. Вместо редких Bitmap-снимков и JPEG-проходов — поток CameraX с целью до 30 кадров/с; на слабых устройствах темп адаптируется до 20/15. Превью ограничено примерно 640×480, а качество сохраняемого фото и намеренно рваный FPS видео не меняются. Скорость на реальных моделях ещё требует замера.
+
 «Шакал Камера» превращает обычную съёмку в эстетику пятидесяти пересылок: тёплые квадраты, мягкие края, цвета с историей. Внутри настоящая Android-камера **CameraX / Camera2**, а не сайт в оболочке.
 
 | 📷 Фото | 🎬 Видео | 🐺 Высокое искусство |
@@ -28,7 +30,7 @@
 | Paint / Nearest / Чистый | Телефонная полоса, bitcrush, тремоло и паузы | Фото в PNG, видео в MP4 |
 
 - **Снимай:** передняя / задняя камера, фокус касанием, свет и зум.
-- **Смотри:** переключаемый облегчённый фильтр в видоискателе, примерно один кадр в секунду.
+- **Смотри:** переключаемый облегчённый фильтр в видоискателе, на GPU, с адаптивным темпом до 30 кадров/с.
 - **Сравнивай:** оригинал и результат, импорт из галереи, «Ещё шакальнее».
 - **Делись:** сохранение в системную галерею и отправка через меню Android.
 
@@ -50,7 +52,7 @@
 
 ## Три шага
 
-1. Скачай **ShakalCamera-1.0.1.apk** в [релизе](https://github.com/drtxc/ShakalCamera/releases/tag/v1.0.1) и установи на **Android 8.0+**.
+1. Скачай **ShakalCamera-1.0.2.apk** в [релизе](https://github.com/ChrysNeb/ShakalCamera/releases/tag/v1.0.2) и установи на **Android 8.0+**.
 2. Разреши камеру, выбери **Фото** или **Видео**, уровень и нажми кнопку съёмки.
 3. Сравни с оригиналом и нажми **Сохранить** или **Поделиться**.
 
@@ -82,7 +84,7 @@
 ## Для разработчиков
 
 ```bash
-git clone https://github.com/drtxc/ShakalCamera.git
+git clone https://github.com/ChrysNeb/ShakalCamera.git
 cd ShakalCamera
 # Нужны JDK 17 и Android SDK; путь к SDK — в local.properties
 sh ./gradlew assembleDebug testDebugUnitTest lintDebug
@@ -95,7 +97,7 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`. GitHub Actions собирае�
 - [Архитектура, таблицы и сборка](docs/DEVELOPMENT.md)
 - [Что проверено и что ещё не проверено](TESTING.md)
 - [Изменения](CHANGELOG.md)
-- [Сообщить об ошибке](https://github.com/drtxc/ShakalCamera/issues/new/choose)
+- [Сообщить об ошибке](https://github.com/ChrysNeb/ShakalCamera/issues/new/choose)
 
 Таблицы и принципы обработки перенесены из фото- и видео-шакализаторов. Веб-проекты не нужны ни при сборке, ни при работе приложения.
 
