@@ -42,7 +42,7 @@ public final class VideoEngine {
     private void runPass(File input,File output,int level,long seed,int[] size,int[] grid,boolean first,Listener listener,Runnable next){
         if(cancelled)return;pass=first?0:1;int l=level==12?10:level;
         List<Effect> effects=new ArrayList<>();
-        if(first){effects.add(Presentation.createForWidthAndHeight(size[0],size[1],Presentation.LAYOUT_SCALE_TO_FIT));effects.add(new PixelEffect(grid[0],grid[1],level==12,level==12?.35f:l>=4?Math.min(.78f,.4f+(l-4)*.06f):0));effects.add(FrameDropEffect.createDefaultFrameDropEffect(level==12?8:Levels.FPS[l]));}
+        if(first){effects.add(Presentation.createForWidthAndHeight(size[0],size[1],Presentation.LAYOUT_SCALE_TO_FIT));effects.add(new OldCameraEffect(grid[0],grid[1],level,seed));}
         else{effects.add(Presentation.createForWidthAndHeight(size[0],size[1],Presentation.LAYOUT_SCALE_TO_FIT));if(level==12)effects.add(new PixelEffect(grid[0],grid[1],true));else effects.add(new HslAdjustment.Builder().adjustSaturation((l-1)*6f).build());}
         Effects fx=new Effects(first?ImmutableList.of(new ShakalAudioProcessor(level,seed)):ImmutableList.of(),effects);
         MediaItem item=new MediaItem.Builder().setUri(Uri.fromFile(input)).setClippingConfiguration(new MediaItem.ClippingConfiguration.Builder().setEndPositionMs(60_000).build()).build();
